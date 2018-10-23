@@ -1,5 +1,7 @@
 #!/usr/bin/python3
 
+# Simple script to import all repos from 
+
 import argparse
 
 from sys import stdout, stderr, exit
@@ -63,7 +65,7 @@ def pullRepo(repo_url, local_repo_path):
 
 # GLOBAL VARS
 
-github_links_file = "b2-pyth-notes"
+github_urls_file = "github_urls_file"
 repos_dir="./repos"
 
 # will be formatted as name:git_connection_string
@@ -82,10 +84,10 @@ try:
 except FileExistsError as e:
     pass
 
-# Read github_links_file and iterate on every lines
+# Read github_urls_file and iterate on every lines
 # Each line is as follow : "name:github_url"
 # We're gonna do the ACTION provided as the script argument on every repo
-with open(github_links_file, "r") as file:
+with open(github_urls_file, "r") as file:
 
     for line in file.readlines():
 
@@ -137,12 +139,12 @@ stdout.write("\n  " + str(len(faulty_repo_owners)) + " were faulty"
              + "\n  " + str(len(updated_repo_owners)) + " were pulled"
              + "\n  " + str(len(nawak_repo_owners)) + " nawak.")
 
-if len(faulty_repo_owners) > 0
+if len(faulty_repo_owners) > 0:
     stdout.write("\n\nFaulty repos (unable to clone) : ")
     for name in faulty_repo_owners: 
         stdout.write("\n > " + name + " : " + all_repos[name])
 
-if len(nawak_repo_owners) > 0
+if len(nawak_repo_owners) > 0:
     stdout.write("\n\nNon-correctly formatted repos : ")
     for name in nawak_repo_owners:
         stdout.write("\n > " + name + " : " + all_repos[name])
