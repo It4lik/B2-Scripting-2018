@@ -6,7 +6,7 @@ Pas de pb pour le lancer aussi si vous êtes sous Linux ou MacOS. Vu l'utilisati
 
 Les scripts déposés ici sont +/- [PEP8](https://www.python.org/dev/peps/pep-0008/). Pour rappel, c'est un ensemble de conventions de codage pour Python. Comme le nommage des variables, fonctions, ou le nombre de lignes vides entre deux définitions de fonction, par exemple. Ca permet de rendre la lecture du Python un peu plus facile et universelle.  
 
-Pour tester les principes syntaxiques de base PEP8 sur vos scripts vous pouvez : 
+Pour tester si vos scripts sont conformes avec les principes syntaxiques de base de PEP8, vous pouvez : 
 ```
 $ pip install pycodestyle
 
