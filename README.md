@@ -4,7 +4,7 @@ Contient des infos au sujet du cours Scripting pour les B2 YNOV 2018.
 
 ## `bash`
 
-Le répertoire `bash/tp/` contient des propositions de résolution aux exos du [TP `bash`](https://gist.github.com/It4lik/db4e7cdf2d6fbc959f3e3511b3feaf21). (à venir, j'en profite pour les relire avant de les pousser ici, d'ici demain pour ceux qui voient ça :) )
+Le répertoire `bash/tp/` contient des propositions de résolution aux exos du [TP `bash`](https://gist.github.com/It4lik/db4e7cdf2d6fbc959f3e3511b3feaf21).
 
 ## Python
 
