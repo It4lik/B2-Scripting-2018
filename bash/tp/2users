@@ -1,0 +1,33 @@
+#!/bin/bash
+
+### 2users
+### List users from /etc/passwd
+### it4
+### 2018-10-10
+
+
+getUserAndShells() {
+  cut -d':' -f1,7 < /etc/passwd
+  # This has the same effect as below but : 
+  #  - this is short and explicit
+  #  - this only calls one command : `cut`
+  #  - no need to use a `cat` here
+}
+
+#getUserAndShells() {
+#  cat /etc/passwd | cut -d':' -f1,7
+#}
+
+#if [[ -f '/etc/passwd' ]]
+#then
+#  getUserAndShells 
+#fi
+
+#if [[ -f '/etc/passwd' ]] ; then
+#  getUserAndShells 
+#fi
+
+#[[ -f '/etc/passwd' ]] \
+#  && getUserAndShells 
+
+if [[ -f '/etc/passwd' ]] ; then getUserAndShells ; fi ;

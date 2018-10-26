@@ -1,0 +1,61 @@
+#!/bin/bash
+
+### 73mol
+### Resolve 72mol
+### it4
+### 2018-10-10
+
+
+declare -r mol_file='./mol'
+declare -i attempts_count=0
+declare -i success=0
+
+welcomeMessage() {
+  echo 'Gonna quickly resolve 72mol...'
+}
+
+success() {
+  echo -e "I found it, it was ${guessed_number}. Attempts : ${attempts_count}."
+  exit 0
+}
+
+###
+
+welcomeMessage
+
+# Start dichotomy
+declare -i high_number=100
+declare -i low_number=1
+declare -i guessed_number=0
+
+while [[ $success == 0 ]] 
+do
+
+  guessed_number=$(( ( high_number + low_number ) / 2 ))
+
+  # We could have used $(tput col) to get number of cols and properly wipe previous line. 
+  # Just want to stay simple here :)
+  echo -en "                                    \\r" # Wipes out previous line
+
+  echo -en "Trying ${guessed_number}\\r"
+
+  # Writes to file the new number
+  echo $guessed_number >> ${mol_file}
+
+  (( attempts_count++ ))
+
+  sleep 2
+
+  if [[ $(cat ${mol_file} 2> /dev/null | grep 'Nice find !') ]] ; then
+    success=1
+
+  elif [[ $(cat ${mol_file} 2> /dev/null | grep "More") ]] ; then
+    low_number=$guessed_number
+
+  elif [[ $(cat ${mol_file} 2> /dev/null | grep "Less") ]] ; then
+    high_number=$guessed_number
+
+  fi
+done
+
+success

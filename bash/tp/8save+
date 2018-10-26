@@ -1,0 +1,147 @@
+#!/bin/bash
+
+### 8save+
+### Backup selected dir (default /home) to local or remote storage if available
+### it4
+### 2018-10-10
+
+### Binaries
+declare -r _rsync=$(which rsync 2> /dev/null) || { echo 'rsync binary not found, exiting.' ; exit 2 ; }
+declare -r _tar=$(which tar 2> /dev/null) || { echo 'tar binary not found, exiting.' ; exit 2 ; }
+declare -r _ssh=$(which ssh 2> /dev/null) || { echo 'ssh binary not found, exiting.' ; exit 2 ; }
+
+### 
+
+# Local machine
+declare -r backed_up_dir='/home'
+declare -r local_destination_dir='/opt'
+declare -r backup_logfile='/tmp/backup.log'
+
+# Remote storage server infos
+declare -r storage_server='localhost'
+declare -ri storage_server_ssh_port=22
+declare -r storage_server_remote_user='root'
+declare -r storage_server_backup_dir='/srv'
+declare -r storage_server_ssh_test="$_ssh -o PreferredAuthentications=publickey \
+                                        -o StrictHostKeyChecking=no \
+                                        -p ${storage_server_ssh_port} \
+                                        ${storage_server_remote_user}@${storage_server} \
+                                        exit --"
+
+###
+
+log() {
+  # Prints message to STDOUT and in $backup_logfile
+
+  log_message=$1
+
+  echo "${log_message}" | tee -a ${backup_logfile}
+
+}
+
+cleanupLocalDestinationDir() {
+  # Only keep 5 newest .tar.gz files in $local_destination_dir
+  # Based on MTIME
+
+  # one-liner solutions
+  # find /opt -type f -printf '%T+ %p\n' | sort  | head -n5 | awk '{print $2}' | xargs rm -f {} --
+  # ls -alhdpt ${local_destination_dir}/* | tail -n +6 | awk '{print $NF}' | xargs rm -f {} --
+
+  files_number=$(find ${local_destination_dir} -maxdepth 1 -type f -name '*tar.gz' | wc -l)
+
+  if [[ $files_number -gt 5 ]] ; then
+    oldest_files="$(find ${local_destination_dir} -maxdepth 1 -type f -name '*tar.gz'  -printf '%T+ %p\n' | sort | head -n -5 | awk '{print $NF}')"
+
+    deleted_files_count=0
+    for files in $oldest_files ; do
+      rm "$files" -f &> /dev/null
+      (( deleted_files_count++ ))
+    done
+
+    echo "  > CLEANUP : ${deleted_files_count} files were removed from ${local_destination_dir}."
+
+  fi
+}
+
+
+remote_backup() {
+  # actually rsync $1 (local path) to remote server (through SSH)
+
+  archive_path=$1
+
+  # With ${archive_path}/*, we only copy the tar.gz files (not the whole directory)
+  $_rsync -avz -e "ssh -p ${storage_server_ssh_port}" \
+      --remove-source-files \
+      "${archive_path}" \
+      "${storage_server_remote_user}@${storage_server}:${storage_server_backup_dir}" \
+      &> /dev/null
+
+  return $?
+}
+
+backup() {
+  # Issue backup using tar, and then rsync ro $storage_server all local backups (if $storage_server is available)
+
+  # Future archive name
+  archive_name="home_backup_$(date +%y%m%d%H%M%S).tar.gz"
+  
+  log "$(date '+%y-%m-%d %H:%M:%S')"
+  log "  > STARTING backup."
+
+  backup_command="${_tar} -cvzf ${local_destination_dir}/${archive_name} ${backed_up_dir}"
+
+  if $backup_command &> /dev/null ; then
+    log "  > SUCCESSFUL backup ${backed_up_dir} successfully backed up in ${local_destination_dir}."
+
+  else
+    log "  > FAILED backup."
+    exit 1
+
+  fi
+
+  # If a ssh connection is available, then rsync backups on the remote server
+  if $storage_server_ssh_test &> /dev/null ; then
+
+    log '  > Storage server available. Copying to remote.'
+
+    # Actully issue remove backup (rsync)
+    log "  > Syncing ${local_destination_dir}/${archive_name} to remote server."
+    remote_backup "${local_destination_dir}/${archive_name}"
+
+    # If there are some local backups, copy them remotely too
+    if [[ "$(find ${local_destination_dir} -maxdepth 1 -type f | wc -l)" -gt 1 ]] ; then
+      log "  > Found old backups in ${local_destination_dir}, copying them remotely."
+      
+      remote_backup "${local_destination_dir}/*"
+    fi
+    return 0
+
+  # Otherwise, just keep local backups
+  else 
+      log '  > SSH connection to storage server is unavailable.'
+      log "    - passwordless SSH connection ${storage_server_remote_user}@${storage_server} on port ${storage_server_ssh_port} must be workin."
+  fi
+}
+
+# Add this script to crontab (everyday at 12:00)
+addToCrontab() {
+  tmpfile=$(mktemp)
+  echo '0 12 * * * root /srv/8save' > "$tmpfile"
+  crontab "$tmpfile"
+  rm "$tmpfile"
+}
+
+###
+
+# Backup and rsync files to remote server if available (through SSH)
+backup
+
+# Clean local backup dir (if there are more than 5 files)
+# This is only useful when $storage_server is unavailable, because the remote rsync also delete local backups
+cleanupLocalDestinationDir
+
+# Add this script to crontab
+#addToCrontab
+
+exit 0
+

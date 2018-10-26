@@ -1,0 +1,22 @@
+#!/bin/bash
+
+### 1date
+### Print current date as a sentence (french formatted)
+### it4
+### 2018-10-10
+
+# First method (quick)
+echo 'First method :'
+date +'We are %A, %B the %dth of %Y.'
+
+echo
+
+
+# Second, a bit uselessly long
+day_of_the_week=$(date +%A)
+month_name=$(date +%B)
+day_of_the_month=$(date +%d)
+year=$(date +%Y)
+
+echo 'Second method :'
+echo "We are ${day_of_the_week}, ${month_name} the ${day_of_the_month}th of ${year}."

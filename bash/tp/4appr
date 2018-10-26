@@ -1,0 +1,42 @@
+#!/bin/bash
+  
+### 4appr
+### Ask user for a note, print corresponding appreciation
+### it4
+### 2018-10-10
+
+read -r -p 'Saisir une note : ' input_note
+
+#[[ "$input_note" =~ ^([0-9]|1[0-9]|20)$ ]] 
+# Such a test, regex comparison, fails on '²' character in bash
+# Let's find a more robust way to do this
+
+# Test if input_note is an integer
+# Use of builtin ::digit:: bash character class
+# see https://www.gnu.org/software/grep/manual/html_node/Character-Classes-and-Bracket-Expressions.html
+if [[ $input_note == [[:digit:]]* ]]
+then
+
+  if [[ $input_note -le 5 ]] ; then 
+    echo 'Passable'
+  
+  elif [[ $input_note -le 10 ]] ; then 
+    echo 'Insuffisant' 
+  
+  elif [[ $input_note -le 15 ]] ; then
+    echo 'Bien' 
+  
+  elif [[ $input_note -le 20 ]] ; then
+    echo 'Excellent'
+
+  else  
+    echo 'You must input a number between 0 and 20'
+  fi
+
+else
+
+  echo "You must input a integer."
+  exit 1
+
+fi
+  

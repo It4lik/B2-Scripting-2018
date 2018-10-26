@@ -1,0 +1,81 @@
+#!/bin/bash
+
+### 72mol
+### More or less game with a file
+### it4
+### 2018-10-10
+
+declare -r mol_file='./mol'
+declare -r -i number_to_find=$(( ( RANDOM % 10 ) + 1 ))
+declare -i attempts_count=0
+declare success=false
+
+gameUsage() {
+  echo -e '
+Use the '" ${mol_file} "' file in the current directory to play.
+PS : you can launch me as a daemon with the '"'"'&'"'"' character.'
+}
+
+welcomeMessage() {
+  echo 'Welcome in this magic more or less game. You gotta guess the number (between 1 and 100). Gl.
+The script reads this file every second
+You can write a number on any line of this file, the number must be alone on his line. 
+Only the first number will be read :)' > ${mol_file}
+}
+
+writeToFile() {
+  string_to_write=$1
+  user_number=$2
+
+  welcomeMessage
+
+  echo -e "\\nYou said ${user_number}. It's ${string_to_write}.\nAttempts : ${attempts_count}" >> ${mol_file}
+}
+
+success() {
+  echo -e "Nice find ! It was ${number_to_find}. You found it in ${attempts_count} attempts." > ${mol_file}
+  echo -e "Nice find ! It was ${number_to_find}. You found it in ${attempts_count} attempts."
+
+  # Or, in one line (write to STDOUT and a file t the same time)
+  #echo -e "Nice find ! It was ${number_to_find}. You found it in ${attempts_count} attempts." | tee ${mol_file}
+
+  exit 0
+}
+
+###
+
+gameUsage
+
+welcomeMessage
+
+while [[ "$success" = false ]]
+do
+
+  user_number=$(cat ${mol_file} 2> /dev/null | grep -E '^([1-9]|[1-9][0-9]|100)$' | grep -v 'Gl')
+
+  # Control user input
+  if [[ "${user_number}" == [[:digit:]]* ]] ; then
+
+    # Actually process the game's logic
+    if [[ $user_number -eq $number_to_find  ]] ; then
+      success=true
+  
+    elif [[ $user_number -gt $number_to_find ]] ; then 
+      string_to_write='Less'
+  
+    else
+      string_to_write='More'
+    fi
+  
+    (( attempts_count++ ))
+  
+    writeToFile "$string_to_write" "$user_number"
+
+  fi
+
+  sleep 1
+  #echo 'File processed'
+
+done
+
+success

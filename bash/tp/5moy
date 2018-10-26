@@ -1,0 +1,53 @@
+#!/bin/bash
+  
+### 5moy
+### Ask user for notes, print average
+### it4
+### 2018-10-10
+
+
+printAverageAndExit() {
+
+  note_total=$1
+  note_count=$2
+
+  echo "La moyenne est de $(( note_total / note_count )) pour ${note_count} notes."
+
+  exit 0
+}
+
+echo 'Saisir plusieurs notes (séparées par des espaces ou retours à la ligne) afin d'"'"'obtenir une moyenne'
+
+read -r user_input
+
+note_count=0
+note_total=0
+
+while : 
+do
+  if [[ ! $user_input == [[:digit:]]* ]]
+  then
+    if [[ "$user_input" == 'q' ]]
+    then
+      printAverageAndExit $note_total $note_count
+    else
+      echo "You must input a integer between 0 and 20."
+      read -r user_input
+      continue
+    fi
+  fi
+
+  (( note_total += user_input ))
+  (( note_count++ ))
+
+  # Long and ugly
+  #note_total=$(( note_total + user_input ))
+  #note_count=$(( note_count + 1 ))
+
+
+  read -r user_input
+
+done
+
+printAverageAndExit note_total note_count
+

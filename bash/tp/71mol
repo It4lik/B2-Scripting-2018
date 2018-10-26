@@ -1,0 +1,76 @@
+#!/bin/bash
+
+### 71 mol
+### Interactive more or less game
+### it4
+### 2018-10-10
+
+### Formatting
+RED='\e[31m'
+GREEN='\e[32m'
+NC='\e[0m' # No Color
+BOLD='\e[1m'
+
+###
+
+declare -r -i number_to_find=$(( ( RANDOM % 100 ) + 1 ))
+declare -i attempts_count=0
+declare success=false
+
+printResultAndExit() {
+
+  if [[ "$success" = true ]] ; then
+    echo -e "${BOLD}${GREEN}Nice find !${NC} It was ${number_to_find}. You found it in ${attempts_count} attempts."
+  else
+    echo -e "${BOLD}${RED}Sad !${NC} It was ${number_to_find}"
+  fi
+
+  exit 0
+}
+
+###
+
+echo -e "${BOLD}${GREEN}Welcome in this magic more or less game. You gotta guess the number (between 0 and 100). Gl.${NC}"
+
+while [[ "$success" = false ]]
+do
+
+  # Because 7 is the average number of tries (statistically)
+  # Quick if/then structure using bash boolean line evaluation
+  [[ $attempts_count == 7 ]] \
+    && echo 'A lot of people would have already found the answer :('
+  
+  read -r -p 'Your number : ' user_number
+
+  # Control user input
+  if [[ "${user_number}" == [[:digit:]]* ]] ; then
+
+    # Actually process the game's logic
+    if [[ $user_number -eq $number_to_find  ]] ; then
+      success=true
+
+    elif [[ $user_number -gt $number_to_find ]] ; then 
+      echo 'Less'
+
+    else
+      echo 'More'
+    fi
+
+    (( attempts_count++ ))
+
+  else
+
+    if [[ "$user_number" == 'q' ]] ; then
+      printResultAndExit
+
+    else
+      echo -e "${RED}NOP !${NC}"
+      echo 'You got to input a number between 1 and 100'
+
+    fi
+
+  fi
+
+done
+
+printResultAndExit

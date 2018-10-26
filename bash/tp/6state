@@ -1,0 +1,47 @@
+#!/bin/bash
+
+### 6state
+### Print some system infos (OS, network, etc.) on RedHat-based systems (Fedora, CentOS, RHEL, ...)
+### it4
+### 2018-10-10
+
+### Colors
+RED='\033[0;31m'
+GREEN='\033[0;32m'
+NC='\033[0m' # No Color
+
+### Gather informations
+
+if [[ -f /etc/os-release ]] ; then
+  # Source is used to read a file, and grab all of its variables
+  source /etc/os-release
+else
+  echo 'Can'"'"'t find /etc/os-release file, skipping.'
+fi
+
+if [[ -z $PRETTY_NAME ]]; then
+  os_name="Unable to detect OS"
+else
+  os_name="${PRETTY_NAME}"
+fi
+
+ip_address=$(ip a | grep -E '(wlo1|enp0s8)' | grep inet | awk '{print $2}')
+fqdn=$(hostname --fqdn)
+kernel_version=$(uname -r)
+five_last_logged_in_users=$(last | grep -v -E 'reboot|wtmp' | awk '{print $1}' |  uniq | sed '/^[[:blank:]]*$/ d')
+
+[[ $(which python) ]] \
+  && { is_python_installed=true ; python_version=$(python -V 2>&1) ; } \
+  || is_python_installed=false
+
+### Output
+
+echo -e "Host ${fqdn} state :
+  IP Address : ${ip_address}
+  OS : ${os_name}
+  Kernel version : ${kernel_version}
+  Last 5 users logged in : ${five_last_logged_in_users}
+  SSH Server : $(systemctl is-active sshd)"
+[[ $is_python_installed == true ]] \
+  && echo -e "  Python : version ${GREEN}${python_version}${NC}" \
+  || echo -e "  ${RED}Python : not installed${NC}"

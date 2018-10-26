@@ -1,0 +1,27 @@
+#!/bin/bash
+  
+### 3ress
+### Prints some system resources
+### it4
+### 2018-10-10
+
+### Formatting
+NC='\e[0m' # No Color
+BOLD='\e[1m'
+
+### Binaries
+_free=$(which free 2> /dev/null) || { echo 'free binary not found, exiting.' ; exit 2 ; }
+_df=$(which df 2> /dev/null) || { echo 'df binary not found, exiting.' ; exit 2 ; }
+_sar=$(which sar 2> /dev/null) || { echo 'sar binary not found, did you install '"'sysstat'"' package ? Exiting.' ; exit 2 ; }
+
+###
+
+free_memory=$($_free -h --si | grep Mem | awk '{print $4}')
+#free_memory=$($_free -h  --si | grep Mem | sed 's/  */ /g' | cut -d' ' -f3)
+root_part_occupation=$($_df -h | grep '/$' | awk '{print $5}')
+# get cpu_usage by adding %user %system usage values
+cpu_usage=$($_sar -u 1 4 | grep Average | awk '{print $3 + $5}')
+
+echo -e "La mémoire libre est de : ${BOLD}${free_memory}${NC}.
+La partition root est occupée à ${BOLD}${root_part_occupation}${NC}.
+L'utilisation CPU des 4 dernières secondes a été de ${BOLD}${cpu_usage}%${NC}."

@@ -1,0 +1,356 @@
+#!/bin/bash
+
+### 9ggbro
+### Interactive NGINX virtual host manager
+### it4
+### 2018-10-10
+
+### Prerequisites
+
+[[ $(id -u) -ne 0 ]] && { echo 'This script must be ran as root' ; exit 1 ; }
+
+if [[ -f /etc/selinux/config ]] ; then
+
+  selinux_state=$(sestatus | grep "Current mode:" | awk '{print $NF}')
+  [[ $selinux_state == 'enforcing' ]] && { echo 'Please disable SELinux before running this script' ; exit 3 ; }
+
+fi
+
+declare -r _openssl=$(which openssl 2> /dev/null) || { echo 'openssl binary not found, exiting.' ; exit 2 ; }
+
+### Formatting
+
+RED='\e[31m'
+GREEN='\e[32m'
+YEL='\e[93m'
+NC='\e[0m' # No Color
+BOLD='\e[1m'
+UND='\e[4m'
+
+### Traps
+
+trap terminateScript INT
+
+### Vars
+
+declare -r nginx_version=$(nginx -V 2>&1 | grep version | cut -d'/' -f2)
+declare -r nginx_conf_dir='/etc/nginx'
+declare -r nginx_confd_dir="${nginx_conf_dir}/conf.d"
+declare -r ssl_dir='/etc/ssl'
+
+# Array of existing vhosts
+declare -A nginx_vhosts
+# List of used ports. Used to check that listening ports are unique.
+declare nginx_vhost_ports
+
+# Used in several functions to print log messages
+declare log_message=''
+
+### Funcs
+
+# Verify that NGINX is up and running
+testNginxPresence() {
+
+  declare -r _nginx=$(which nginx 2> /dev/null) || { echo 'nginx binary not found. Exiting.' ; exit 2 ; }
+    
+  [[ $(systemctl is-active nginx) == 'active' ]] \
+    || { echo 'NGINX service is not running. Exiting.' ; exit 2 ; }
+}
+
+# Gather infos on vHosts in $nginx_confd_dir (fills the $nginx_vhosts indexed array)
+gatherNginxVhostInfos() {
+
+  # Clean previous vars
+  unset nginx_vhosts
+  unset nginx_vhost_ports
+
+  # Actually gather all infos by detecting 'server_name' string in NGINX conf files
+  vhosts="$(grep -ri 'server_name' ${nginx_confd_dir})"
+
+  vhost_counter=0
+  OLDIFS=$IFS
+  IFS='
+'
+  for vhost in $vhosts ; do
+
+    (( vhost_counter ++ ))
+
+    # Get vhost file name and trim ':' character at the end of string (grep adds it)
+    vhost_file="$(awk '{print $1}' <<< ${vhost})"
+    vhost_file=${vhost_file%?} # trim last character
+   
+    # Get vhost name (server_name) and trim using the ';' character of NGINX conf 
+    vhost_name="$(awk '{print $3}' <<< ${vhost} | cut -d';' -f1)"
+
+    # Get vhost port
+    vhost_port="$(grep 'listen' ${vhost_file}  | grep -o -E '[0-9]{1,5}')"
+    nginx_vhost_ports="${nginx_vhost_ports} ${vhost_port}"
+
+    vhost_root="$(grep '^ *root *.*$' ${vhost_file} | sed 's/ *root *//' | cut -d';' -f1)"
+
+    nginx_vhosts[$vhost_counter]="${vhost_port}:${vhost_name}:${vhost_root}:${vhost_file}"
+
+  done
+  IFS=$OLDIFS
+}
+
+# Pretty-print a list of all vHosts in $nginx_confd_dir
+printVhostInfos() {
+ 
+  # Parse $nginx_confd_dir .conf files 
+  gatherNginxVhostInfos 
+
+  # Prints banner (and clear screen) 
+  banner
+
+  echo -e "${YEL}vHost list from ${nginx_confd_dir} directory :${NC} \n"
+
+  # Iterate on all gathered vHosts (in $nginx_vhosts array), and print infos
+  for vhost_number in "${!nginx_vhosts[@]}" ; do
+
+    vhost_port=$(cut -d':' -f1 <<< "${nginx_vhosts[$vhost_number]}")
+    vhost_name=$(cut -d':' -f2 <<< "${nginx_vhosts[$vhost_number]}")
+    vhost_root=$(cut -d':' -f3 <<< "${nginx_vhosts[$vhost_number]}")
+    vhost_file=$(cut -d':' -f4 <<< "${nginx_vhosts[$vhost_number]}")
+
+    printf "${BOLD}${UND}vHost n°${vhost_number}:${NC}
+  Server name : ${vhost_name}
+  Port : ${vhost_port}
+  Web root : ${vhost_root}
+  vHost file : ${vhost_file}\n"
+
+  done
+}
+
+# Asks user for new vhost infos and add it to the config
+addVhost() {
+
+  # 1. Ask for server_name (check FQDN formatting)
+  while : ; do
+    read -p 'Choose a server_name : ' new_server_name
+    [[ ! $new_server_name =~ ^[a-z0-9]([a-z0-9]|-)*(\.([a-z0-9]|-)*)*$ ]] \
+      && echo -e "${RED}Must be FQDN formatted${NC}" \
+      && continue
+  break
+  done
+
+  # 2. Ask for a port (1 to 9999) not already in use
+  while : ; do
+    read -p 'Choose a port : ' new_port
+
+    [[ ! $new_port =~ ^[1-9][0-9]{0,3}$ ]] \
+      && echo -e "${RED}Must be a port between 1 and 9999${NC}" \
+      && unset new_port \
+      && continue 
+
+    # Check if port is already in use
+    for port_in_use in $nginx_vhost_ports ; do
+      [[ "$new_port" == "$port_in_use" ]] \
+        && echo -e "${RED}Port already in use.${NC}" \
+        && unset new_port \
+        && continue 2
+    done 
+    break
+  done
+
+  # 3. Ask for a config file name
+  while : ; do
+   read -p 'Choose a name : ' new_config_file
+
+   [[ ! $new_config_file =~ ^([a-z0-9]|-|\.)+\.conf$ ]] \
+     && echo -e "${RED}Must be a name matching the regex : ^([a-z0-9]|-|\.)+\.conf$ ${NC}" \
+     && continue
+
+    break
+  done
+
+  new_config_file="${nginx_confd_dir}/${new_config_file}"
+
+  # 4. Ask for a webroot (absolute path)
+  while : ; do 
+    read -p 'Choose a web root directory : ' new_webroot
+
+    [[ ! $new_webroot =~ ^(\/([a-zA-Z0-9]|-|\.)+)+$ ]]  \
+      && echo -e "${RED}Must be an absolute path.${NC}" \
+      && continue
+
+    break
+  done
+ 
+  # 5. Ask user for confirmation
+  printf "\nYour vHost will be created as follows : 
+  server_name : %s
+  port : %s
+  configuration file : %s
+  webroot : %s\n\n" \
+  "$new_server_name" "$new_port" "$new_config_file" "$new_webroot"
+
+  while : ; do
+    read -p "Proceed ? [y/n] : " proceed
+    [[ ! $proceed =~ ^y|Y|n|N$ ]] \
+      && continue
+    break
+  done
+
+  # 6. Create vHost config 
+  if [[ $proceed =~ ^y|Y$ ]] ; then
+
+    echo -e "Creating the vhost.\n"
+
+    # Actually create the vHost (eg its config file)
+    generateKeys "$new_server_name"
+    createConfigFile "$new_server_name" "$new_port" "$new_webroot" "$new_config_file"
+
+    if [[ $? -eq 0 ]] ; then
+      log_message="${GREEN}vHost created !${NC}"
+    else
+      log_message="${RED}vHost creation failed.${NC}"
+      return 1
+    fi
+
+    systemctl restart nginx &> /dev/null
+
+    if [[ $? -eq 0 ]] ; then
+      log_message="${log_message}\n${GREEN}Successfully restarted NGINX server${NC}"
+    else
+      log_message="${log_message}\n${RED}NGINX restart failed...${NC}"
+    fi
+
+  elif [[ $proceed =~ ^n|N$ ]] ; then
+    log_message='vHost creation cancelled.'
+
+  fi
+
+}
+
+# Handle vHost config file creation (and restart NGINX)
+createConfigFile() {
+
+  # Args
+  vhost_name=$1
+  vhost_port=$2
+  vhost_webroot=$3
+  vhost_config_file=$4
+
+
+  echo "server {
+    listen       ${vhost_port} ssl;
+    server_name  ${vhost_name};
+    root         ${vhost_webroot};
+    ssl_certificate     ${ssl_dir}/${cert_common_name}.crt;
+    ssl_certificate_key ${ssl_dir}/${cert_common_name}.key;
+    ssl_protocols       TLSv1 TLSv1.1 TLSv1.2;
+}
+  " > "${vhost_config_file}"
+
+}
+
+generateKeys() {
+
+  cert_common_name=$1
+
+  echo -e "${YEL}Generating keys...${NC}"
+
+  $_openssl req -new -newkey rsa:4096 -days 365 -nodes -x509 \
+    -subj "/C=US/ST=Denial/L=Springfield/O=Dis/CN=${cert_common_name}" \
+    -keyout "${ssl_dir}/${cert_common_name}.key"  -out "${ssl_dir}/${cert_common_name}.crt" &> /dev/null
+}
+
+# Handle vHost deletion
+removeVhost() {
+  echo -e "\nWhich vHost do you want to delete ?"
+  read -p 'Number : ' vhost_number_to_remove
+  
+  [[ "${nginx_vhosts[$vhost_number_to_remove]+hop}" ]] \
+    || { echo -e "${RED}This vHost does not exist.${NC}" ; return 1 ; }
+
+  vhost_file=$(cut -d':' -f4 <<< "${nginx_vhosts[$vhost_number_to_remove]}")
+  vhost_name=$(cut -d':' -f2 <<< "${nginx_vhosts[$vhost_number_to_remove]}")
+
+  echo "About to delete ${vhost_file} and cert/key pair in ${ssl_dir}."
+  read -p "Are you sure ? [y/n] : " proceed
+  while [[ ! $proceed =~ ^y|Y|n|N$ ]] ; do
+    read -p "Are you sure ? [y/n] : " proceed
+  done
+
+  if [[ $proceed =~ ^y|Y$ ]] ; then
+    rm -f "${vhost_file}" \
+          "${ssl_dir}/${vhost_name}.crt" \
+          "${ssl_dir}/${vhost_name}.key"
+
+    [[ $? -eq 0 ]] \
+      && log_message="${GREEN}vHost successfully removed.${NC}" \
+      || log_message="${RED}vHost deletion failed.${NC}\n"
+  elif [[ $proceed =~ ^n|N$ ]] ; then
+    log_message="${YEL}vHost deletion cancelled.${NC}"
+  fi
+}
+
+# Clear terminal and prints the top banner
+banner() {
+
+  clear
+  echo -e "${YEL}${BOLD}== NGINX ${nginx_version} vHost Manager ==${NC}\n"
+
+}
+
+# Terminate script
+terminateScript() {
+
+  echo -e "\n${BOLD}Bye bro !${NC}\n"
+  exit 0
+
+}
+
+# Prints interactive main menu
+menu() {
+
+  echo -e "
+------------
+${UND}${BOLD}1)${NC} List vHosts (refresh)
+${UND}${BOLD}2)${NC} Add vHosts
+${UND}${BOLD}3)${NC} Remove vHosts
+${UND}${BOLD}4)${NC} Exit
+------------\n"
+  
+  while [[ ! $user_choice =~ ^1|2|3|4$ ]] ; do
+    read -p 'Your choice (number 1-2-3-4) : ' user_choice
+  done
+
+  case "$user_choice" in
+    '1')
+        printVhostInfos
+        ;;
+    '2')
+        addVhost
+        ;;
+    '3')
+        removeVhost
+        ;;
+    '4')
+        terminateScript
+        ;;
+  esac
+
+  # Reset user choice for further operations
+  user_choice=0
+  printVhostInfos
+
+  [[ ! -z $log_message ]] \
+    && echo -e "\n${YEL}${BOLD}LOG :${NC}\n${log_message}" \
+    && log_message=''
+
+  menu
+}
+
+###
+
+# Verify that NGINX server is up and runnin
+testNginxPresence
+# Intially gather NGINX vHosts infos 
+gatherNginxVhostInfos
+# Prints top banner
+banner
+# Prints out the main menu
+menu
+
