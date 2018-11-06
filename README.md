@@ -13,4 +13,4 @@ Le répertoire `python/` contient :
 * scripts permettant de récupérer vos dépôts automatiquement `/python/git`
   * un script pour tout récupérer
   * un script pour checker la conformité et obtenir des stats (simples) sur tous les dépôts (à venir)
-  * le fichier de data qui contient les liens vers vos dépôts
+  * le [fichier de data](./python/git/github_urls_file) qui contient les liens vers vos dépôts
